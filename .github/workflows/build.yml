@@ -30,7 +30,7 @@ jobs:
             libncurses5-dev libncursesw5-dev \
             cmake libffi-dev libssl-dev
 
-      - name: Install buildozer and pinned cython
+      - name: Install buildozer and cython
         run: |
           pip install --upgrade pip
           pip install buildozer
@@ -41,10 +41,6 @@ jobs:
           rm -rf ~/.buildozer
           rm -rf .buildozer
           rm -rf bin
-
-      - name: Accept Android SDK licenses
-        run: |
-          yes | sdkmanager --licenses || true
 
       - name: Build APK
         run: |
