@@ -1,4 +1,4 @@
-name: Build APK with Official Kivy Docker
+name: Build APK
 
 on:
   push:
@@ -48,14 +48,9 @@ jobs:
           path: .buildozer
           key: buildozer-local-${{ hashFiles('buildozer.spec') }}
 
-      - name: Build with Buildozer (APK)
+      - name: Build APK (debug)
         run: |
           yes | buildozer -v android debug
-
-      - name: Build with Buildozer (AAB)
-        run: |
-          yes | buildozer -v android release
-        continue-on-error: true
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
@@ -65,12 +60,3 @@ jobs:
           path: |
             bin/*.apk
           if-no-files-found: warn
-
-      - name: Upload AAB artifact
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: sskid-aab
-          path: |
-            bin/*.aab
-          if-no-files-found: ignore
