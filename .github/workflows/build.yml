@@ -30,11 +30,17 @@ jobs:
             libncurses5-dev libncursesw5-dev \
             cmake libffi-dev libssl-dev
 
-      - name: Install buildozer and cython
+      - name: Install buildozer and pinned cython
         run: |
           pip install --upgrade pip
           pip install buildozer
           pip install "cython<3.0"
+
+      - name: Clear build cache
+        run: |
+          rm -rf ~/.buildozer
+          rm -rf .buildozer
+          rm -rf bin
 
       - name: Accept Android SDK licenses
         run: |
@@ -49,3 +55,4 @@ jobs:
         with:
           name: sskid-apk
           path: bin/*.apk
+          if-no-files-found: error
