@@ -1,0 +1,9 @@
+.buildozer/
+bin/
+pycache/
+*.pyc
+*.pyo
+.venv/
+venv/
+.env
+.DS_Store
