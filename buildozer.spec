@@ -13,7 +13,7 @@ requirements = python3==3.11.9,hostpython3==3.11.9,kivy==2.2.1,cython==0.29.36,p
 orientation = portrait
 fullscreen = 0
 
-android.api = 31
+android.api = 34
 android.minapi = 21
 android.ndk = 25b
 android.ndk_api = 21
@@ -23,7 +23,6 @@ android.allow_backup = True
 android.accept_sdk_license = True
 
 android.debug_manifest_package = com.sskid.sskid
-android.release_artifact = aab
 
 p4a.branch = master
 p4a.source_dir =
