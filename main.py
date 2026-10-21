@@ -3,21 +3,21 @@ Sskid Obfuscator v2 — Android (Kivy)
 Build with buildozer or GitHub Actions
 """
 
-import random, base64, re
+import random
+import base64
+import re
 from kivy.app import App
 from kivy.uix.boxlayout import BoxLayout
-from kivy.uix.gridlayout import GridLayout
 from kivy.uix.textinput import TextInput
 from kivy.uix.button import Button
 from kivy.uix.label import Label
-from kivy.uix.scrollview import ScrollView
 from kivy.core.clipboard import Clipboard
 from kivy.utils import get_color_from_hex
 from kivy.metrics import dp
 from kivy.core.window import Window
 
 # ═══════════════════════════════════════════════════
-#  OBFUSCATION CORE (unchanged)
+#  OBFUSCATION CORE
 # ═══════════════════════════════════════════════════
 
 class SskidV2:
@@ -25,93 +25,131 @@ class SskidV2:
 
     def __init__(self, src, seed=None):
         self.src = src
-        if seed is not None: random.seed(seed)
+        if seed is not None:
+            random.seed(seed)
         self.sig = ''.join(random.choice(self.ALPHA) for _ in range(32))
         self.k1, self.k2, self.k3 = self._derive_keys(self.sig)
         self.strings = []
         self.suffix = ''.join(random.choice("0123456789abcdef") for _ in range(4))
 
     def _derive_keys(self, sig):
-        h1 = []; acc = 0
+        h1 = []
+        acc = 0
         for c in sig.encode():
             acc = (acc * 31 + c) & 0xFFFFFFFF
             h1.append(acc & 0xFF)
         while len(h1) < 16:
             acc = (acc * 31 + (len(h1) * 7)) & 0xFFFFFFFF
             h1.append(acc & 0xFF)
-        h2 = []; acc2 = 0x12345678
+
+        h2 = []
+        acc2 = 0x12345678
         for c in sig.encode():
             acc2 = (acc2 * 17 + c + 42) & 0xFFFFFFFF
             h2.append(acc2 & 0xFF)
         while len(h2) < 16:
             acc2 = (acc2 * 17 + len(h2)) & 0xFFFFFFFF
             h2.append(acc2 & 0xFF)
-        k1 = bytes(h1[:16]); k2 = bytes(h2[:16])
+
+        k1 = bytes(h1[:16])
+        k2 = bytes(h2[:16])
         k3 = bytes(a ^ b for a, b in zip(k1, k2))
         return k1, k2, k3
 
     def _encrypt(self, data):
-        if isinstance(data, str): data = data.encode('utf-8', errors='replace')
+        if isinstance(data, str):
+            data = data.encode('utf-8', errors='replace')
         b = bytearray(data)
-        for i in range(len(b)): b[i] ^= self.k1[i % 16]
-        for i in range(len(b)): b[i] ^= self.k2[i % 16]
+        for i in range(len(b)):
+            b[i] ^= self.k1[i % 16]
+        for i in range(len(b)):
+            b[i] ^= self.k2[i % 16]
         for i in range(len(b)):
             b[i] ^= self.k3[i % 16]
             b[i] ^= (i + 1) & 0xFF
         return base64.b64encode(bytes(b)).decode()
 
     def _lua_unescape(self, s):
-        out = bytearray(); i = 0
-        esc = {'n':10,'t':9,'r':13,'a':7,'b':8,'f':12,'v':11,'\\':92,'"':34,"'":39}
+        out = bytearray()
+        i = 0
+        esc = {'n': 10, 't': 9, 'r': 13, 'a': 7, 'b': 8,
+               'f': 12, 'v': 11, '\\': 92, '"': 34, "'": 39}
         while i < len(s):
             c = s[i]
-            if c == '\\' and i+1 < len(s):
-                i += 1; d = s[i]
+            if c == '\\' and i + 1 < len(s):
+                i += 1
+                d = s[i]
                 if d.isdigit():
                     num = d
-                    while i+1 < len(s) and len(num) < 3 and s[i+1].isdigit():
-                        i += 1; num += s[i]
+                    while i + 1 < len(s) and len(num) < 3 and s[i + 1].isdigit():
+                        i += 1
+                        num += s[i]
                     out.append(int(num) & 0xFF)
-                else: out.append(esc.get(d, ord(d)))
-            else: out.append(ord(c))
+                else:
+                    out.append(esc.get(d, ord(d)))
+            else:
+                out.append(ord(c))
             i += 1
         return bytes(out)
 
     def _tokenize(self, s):
-        i = 0; n = len(s)
+        i = 0
+        n = len(s)
         while i < n:
             if s[i:i+2] == '--':
                 m = re.match(r'--\[(=*)\[', s[i:])
                 if m:
                     close = ']' + m.group(1) + ']'
-                    j = s.find(close, i + m.end()); j = n if j < 0 else j + len(close)
+                    j = s.find(close, i + m.end())
+                    j = n if j < 0 else j + len(close)
                 else:
-                    j = s.find('\n', i); j = n if j < 0 else j
-                yield ('comment', i, j, s[i:j]); i = j; continue
+                    j = s.find('\n', i)
+                    j = n if j < 0 else j
+                yield ('comment', i, j, s[i:j])
+                i = j
+                continue
+
             if s[i] == '[':
                 m = re.match(r'\[(=*)\[', s[i:])
                 if m:
                     close = ']' + m.group(1) + ']'
-                    j = s.find(close, i + m.end()); j = n if j < 0 else j + len(close)
-                    yield ('long_string', i, j, s[i:j]); i = j; continue
+                    j = s.find(close, i + m.end())
+                    j = n if j < 0 else j + len(close)
+                    yield ('long_string', i, j, s[i:j])
+                    i = j
+                    continue
+
             if s[i] in '"\'':
-                q = s[i]; j = i + 1
+                q = s[i]
+                j = i + 1
                 while j < n:
-                    if s[j] == '\\': j += 2; continue
-                    if s[j] == q: j += 1; break
+                    if s[j] == '\\':
+                        j += 2
+                        continue
+                    if s[j] == q:
+                        j += 1
+                        break
                     j += 1
-                yield ('string', i, j, s[i:j]); i = j; continue
+                yield ('string', i, j, s[i:j])
+                i = j
+                continue
+
             j = i
-            while j < n and s[j] not in '"\'-[': j += 1
-            yield ('code', i, j, s[i:j]); i = j
+            while j < n and s[j] not in '"\'-[':
+                j += 1
+            yield ('code', i, j, s[i:j])
+            i = j
 
     def _transform(self):
         parts = []
         for kind, _, _, content in self._tokenize(self.src):
             if kind == 'string':
                 inner = content[1:-1]
-                try: decoded = self._lua_unescape(inner)
-                except Exception: parts.append(content); continue
+                try:
+                    decoded = self._lua_unescape(inner)
+                except Exception:
+                    parts.append(content)
+                    continue
                 self.strings.append(self._encrypt(decoded))
                 parts.append(f'_S_{self.suffix}({len(self.strings)})')
             elif kind == 'long_string':
@@ -274,17 +312,22 @@ end
 '''
 
     def _string_table(self):
-        if not self.strings: return f"for _i_ in ipairs({{}}) do end\n"
+        if not self.strings:
+            return "for _i_ in ipairs({}) do end\n"
         parts = ",".join(f'"{s}"' for s in self.strings)
         return f"_ENC_{self.suffix} = {{{parts}}}\n"
 
     def _dead(self):
         blocks = []
         for _ in range(3):
-            v1 = f"_d{random.randint(1000,9999)}"
-            v2 = f"_d{random.randint(1000,9999)}"
-            n1 = random.randint(100, 900); n2 = random.randint(1000, 9000)
-            blocks.append(f"do local {v1}={n1}+{n2}; local {v2}={v1}*3-{n1}; if {v2}>99999999 then {v2}=0 end end")
+            v1 = f"_d{random.randint(1000, 9999)}"
+            v2 = f"_d{random.randint(1000, 9999)}"
+            n1 = random.randint(100, 900)
+            n2 = random.randint(1000, 9000)
+            blocks.append(
+                f"do local {v1}={n1}+{n2}; local {v2}={v1}*3-{n1}; "
+                f"if {v2}>99999999 then {v2}=0 end end"
+            )
         return "\n".join(blocks) + "\n"
 
     def obfuscate(self):
@@ -292,12 +335,12 @@ end
         region = self._prologue() + self._string_table() + self._dead() + body
         h = self._hash(region)
         header = (
-            f"-- ═══════════════════════════════════════════════════\n"
-            f"-- Sskid Obfuscator v2 (final)\n"
+            "-- ═══════════════════════════════════════════════════\n"
+            "-- Sskid Obfuscator v2 (final)\n"
             f"-- SIG: {self.sig}\n"
             f"-- HASH: {h}\n"
-            f"-- ⚠ Header must be intact; script verifies itself\n"
-            f"-- ═══════════════════════════════════════════════════\n"
+            "-- ⚠ Header must be intact; script verifies itself\n"
+            "-- ═══════════════════════════════════════════════════\n"
         )
         return header + "--<<SKV2_START>>\n" + region + "\n--<<SKV2_END>>\n"
 
@@ -353,7 +396,6 @@ class SskidApp(App):
             color=DIM, font_size=dp(11),
             size_hint_y=None, height=dp(20),
             halign='left',
-            text_size=(None, None),
         ))
         self.input_box = TextInput(
             text='',
@@ -386,7 +428,6 @@ class SskidApp(App):
             text='OUTPUT · obfuscated',
             color=DIM, font_size=dp(11),
             halign='left',
-            text_size=(None, None),
             size_hint_x=0.6,
         ))
         copy_btn = Button(
@@ -419,7 +460,6 @@ class SskidApp(App):
             size_hint_y=None,
             height=dp(24),
             halign='left',
-            text_size=(None, None),
         )
         self.status.bind(size=self.status.setter('text_size'))
         root.add_widget(self.status)
@@ -443,7 +483,8 @@ class SskidApp(App):
             out = obf.obfuscate()
             self.output_box.text = out
             self._set_status(
-                f'✓ {len(obf.strings)} strings encrypted · {len(src):,} → {len(out):,} bytes',
+                f'✓ {len(obf.strings)} strings encrypted · '
+                f'{len(src):,} → {len(out):,} bytes',
                 'ok'
             )
         except Exception as e:
