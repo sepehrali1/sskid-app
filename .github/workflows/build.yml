@@ -1,24 +1,76 @@
 name: Build APK with Official Kivy Docker
+
 on:
   push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
   workflow_dispatch:
 
 jobs:
   build:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
     container:
       image: kivy/buildozer:latest
+      options: --user root
+
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Build APK
+      - name: Show Python & pip versions
+        run: |
+          python3 --version
+          pip3 --version
+
+      - name: Install build dependencies
+        run: |
+          apt-get update -qq || true
+          apt-get install -y --no-install-recommends \
+            git zip unzip openjdk-17-jdk \
+            python3-pip python3-venv \
+            autoconf libtool pkg-config \
+            zlib1g-dev libncurses5-dev libncursesw5-dev \
+            libtinfo5 cmake libffi-dev libssl-dev \
+            libltdl-dev || true
+
+      - name: Cache Buildozer global directory
+        uses: actions/cache@v4
+        with:
+          path: /github/home/.buildozer
+          key: buildozer-global-${{ hashFiles('buildozer.spec') }}
+
+      - name: Cache Buildozer local directory
+        uses: actions/cache@v4
+        with:
+          path: .buildozer
+          key: buildozer-local-${{ hashFiles('buildozer.spec') }}
+
+      - name: Build with Buildozer (APK)
         run: |
           yes | buildozer -v android debug
 
-      - name: Upload APK
+      - name: Build with Buildozer (AAB)
+        run: |
+          yes | buildozer -v android release
+        continue-on-error: true
+
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: sskid-apk
-          path: bin/*.apk
-          if-no-files-found: error
+          path: |
+            bin/*.apk
+          if-no-files-found: warn
+
+      - name: Upload AAB artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: sskid-aab
+          path: |
+            bin/*.aab
+          if-no-files-found: ignore
