@@ -1,4 +1,4 @@
-name: Build APK
+name: Build APK with Official Kivy Docker
 on:
   push:
   workflow_dispatch:
@@ -6,131 +6,19 @@ on:
 jobs:
   build:
     runs-on: ubuntu-22.04
+    container:
+      image: kivy/buildozer:latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.10'
-
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'temurin'
-          java-version: '17'
-
-      - name: Install system dependencies
+      - name: Build APK
         run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            git zip unzip \
-            autoconf libtool pkg-config zlib1g-dev \
-            libncurses5-dev libncursesw5-dev \
-            cmake libffi-dev libssl-dev
+          yes | buildozer -v android debug
 
-      - name: Install buildozer and cython
-        run: |
-          pip install --upgrade pip
-          pip install buildozer
-          pip install "cython<3.0"
-
-      - name: Clear build cache
-        run: |
-          rm -rf ~/.buildozer
-          rm -rf .buildozer
-          rm -rf bin
-          mkdir -p logs
-
-      - name: Build APK (capture everything)
-        id: build_step
-        continue-on-error: true
-        run: |
-          mkdir -p logs
-          set +e
-          yes | buildozer -v android debug > logs/full_build.log 2>&1
-          BUILD_EXIT=$?
-          echo "Build exit code: $BUILD_EXIT"
-          echo "BUILD_EXIT=$BUILD_EXIT" >> $GITHUB_ENV
-
-      - name: Extract errors only
-        if: always()
-        run: |
-          mkdir -p logs
-
-          # 1. خطوط خطا با شماره خط
-          echo "=== ERROR LINES (with line numbers) ===" > logs/errors_only.txt
-          grep -n -i -E "error:|error code|traceback|exception|indexerror|command failed|failed to|fatal error|cannot find|not found" logs/full_build.log >> logs/errors_only.txt 2>/dev/null || echo "no error lines found" >> logs/errors_only.txt
-
-          # 2. هر خطا با ۱۵ خط قبل و ۲۵ خط بعد
-          echo "" > logs/error_context.txt
-          echo "═══════════════════════════════════════════════════════" >> logs/error_context.txt
-          echo "  ERRORS WITH CONTEXT" >> logs/error_context.txt
-          echo "═══════════════════════════════════════════════════════" >> logs/error_context.txt
-          grep -A 25 -B 15 -i -E "traceback|indexerror|error code: [1-9]|command failed" logs/full_build.log >> logs/error_context.txt 2>/dev/null || echo "no traceback found" >> logs/error_context.txt
-
-          # 3. آخرین ۱۵۰ خط (که معمولاً خطای نهایی اینجاست)
-          echo "" > logs/tail.txt
-          echo "═══════════════════════════════════════════════════════" >> logs/tail.txt
-          echo "  LAST 150 LINES (final error is usually here)" >> logs/tail.txt
-          echo "═══════════════════════════════════════════════════════" >> logs/tail.txt
-          tail -150 logs/full_build.log >> logs/tail.txt
-
-          # 4. خلاصه — برای نمایش توی GitHub summary
-          echo "═══════════════════════════════════════════════════════" > logs/summary.txt
-          echo "  BUILD SUMMARY" >> logs/summary.txt
-          echo "═══════════════════════════════════════════════════════" >> logs/summary.txt
-          echo "" >> logs/summary.txt
-          echo "Build exit code: $BUILD_EXIT" >> logs/summary.txt
-          echo "Full log size: $(wc -l < logs/full_build.log) lines" >> logs/summary.txt
-          echo "Errors found: $(grep -c -i -E "error:|traceback|failed" logs/full_build.log || echo 0)" >> logs/summary.txt
-          echo "" >> logs/summary.txt
-          echo "═══ FIRST 5 ERRORS ═══" >> logs/summary.txt
-          grep -i -E "error:|traceback|exception|indexerror" logs/full_build.log | head -5 >> logs/summary.txt 2>/dev/null || echo "(none)" >> logs/summary.txt
-
-      - name: Show errors in GitHub summary
-        if: always()
-        run: |
-          {
-            echo "## 📋 Build Result"
-            echo ""
-            if [ "$BUILD_EXIT" = "0" ]; then
-              echo "✅ **BUILD SUCCESSFUL**"
-            else
-              echo "❌ **BUILD FAILED** (exit code: $BUILD_EXIT)"
-            fi
-            echo ""
-            echo "### 🔴 Errors (first 30 lines)"
-            echo ""
-            echo '```'
-            head -30 logs/errors_only.txt
-            echo '```'
-            echo ""
-            echo "### 📁 Artifacts to download"
-            echo ""
-            echo "Download **build-logs** artifact below and open:"
-            echo "- \`error_context.txt\` — errors with surrounding context"
-            echo "- \`tail.txt\` — last 150 lines (final error usually here)"
-            echo "- \`full_build.log\` — complete log"
-          } >> $GITHUB_STEP_SUMMARY
-
-      - name: Upload APK (if built)
-        if: env.BUILD_EXIT == '0'
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: sskid-apk
           path: bin/*.apk
-
-      - name: Upload logs (always)
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-logs
-          path: logs/
-
-      - name: Fail if build failed
-        if: env.BUILD_EXIT != '0'
-        run: |
-          echo "Build failed — check artifacts"
-          exit 1
+          if-no-files-found: error
